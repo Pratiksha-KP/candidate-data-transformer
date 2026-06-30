@@ -3,9 +3,12 @@ import { RawCandidate } from "../types/rawCandidate";
 import { DocumentExtractor } from "../utils/documentExtractor";
 import { SectionExtractor } from "../utils/sectionExtractor";
 import { EMAIL_REGEX, PHONE_REGEX } from "../utils/regex";
+
 import {
   Education,
   Experience,
+  Links,
+  Project
 } from "../types/common";
 
 const SOURCE_NAME = "Resume";
@@ -13,6 +16,7 @@ const SOURCE_NAME = "Resume";
 export class ResumeParser implements IParser {
 
   private documentExtractor = new DocumentExtractor();
+
   private sectionExtractor = new SectionExtractor();
 
   async parse(filePath: string): Promise<RawCandidate[]> {
@@ -33,11 +37,17 @@ export class ResumeParser implements IParser {
 
       phones: this.extractPhones(document.text),
 
+      links: this.extractLinks(document.text),
+
       skills: this.extractSkills(sections.skills),
 
       experience: this.extractExperience(sections.experience),
 
-      education: this.extractEducation(sections.education)
+      education: this.extractEducation(sections.education),
+
+      projects: this.extractProjects(
+        sections.projects ?? ""
+      )
 
     };
 
@@ -45,14 +55,18 @@ export class ResumeParser implements IParser {
 
   }
 
+  // ----------------------------------------------------
+
   private extractName(header: string): string {
 
     return header
       .split("\n")
       .map(line => line.trim())
-      .find(line => line.length > 0) ?? "";
+      .find(Boolean) ?? "";
 
   }
+
+  // ----------------------------------------------------
 
   private extractHeadline(header: string): string {
 
@@ -61,9 +75,13 @@ export class ResumeParser implements IParser {
       .map(line => line.trim())
       .filter(Boolean);
 
-    return lines.length >= 2 ? lines[1] : "";
+    return lines.length > 1
+      ? lines[1]
+      : "";
 
   }
+
+  // ----------------------------------------------------
 
   private extractEmails(text: string): string[] {
 
@@ -71,50 +89,204 @@ export class ResumeParser implements IParser {
 
   }
 
+  // ----------------------------------------------------
+
   private extractPhones(text: string): string[] {
 
     return text.match(PHONE_REGEX) ?? [];
 
   }
 
-  private extractSkills(skillsSection: string): string[] {
+  // ----------------------------------------------------
 
-    return skillsSection
+  private extractLinks(text: string): Links {
+
+    return {
+
+      github:
+        text.match(/https?:\/\/(?:www\.)?github\.com\/\S+/i)?.[0],
+
+      linkedin:
+        text.match(/https?:\/\/(?:www\.)?linkedin\.com\/\S+/i)?.[0],
+
+      portfolio:
+        text.match(/https?:\/\/\S+/)?.[0]
+
+    };
+
+  }
+
+  // ----------------------------------------------------
+
+  private extractSkills(section: string): string[] {
+
+    return section
+
       .replace(/Languages:/gi, "")
+
       .replace(/Backend\s*\/\s*DB:/gi, "")
+
       .replace(/Frontend:/gi, "")
+
       .replace(/Tools\s*&\s*Platforms:/gi, "")
+
       .replace(/Coursework:/gi, "")
+
       .split(/,|\n|·/)
+
       .map(skill => skill.trim())
+
       .filter(Boolean);
 
   }
+
+  // ----------------------------------------------------
 
   private extractExperience(section: string): Experience[] {
 
+    const lines = section
+
+      .split("\n")
+
+      .map(line => line.trim())
+
+      .filter(Boolean);
+
+    const experiences: Experience[] = [];
+
+    let current: Experience | null = null;
+
+    for (const line of lines) {
+
+      if (/^\d{4}|present|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) {
+
+        if (current) {
+
+          current.startDate = null;
+
+          current.endDate = null;
+
+        }
+
+        continue;
+
+      }
+
+      if (line.startsWith("•")) {
+
+        if (current) {
+
+          current.summary +=
+
+            (current.summary ? " " : "") +
+
+            line.replace(/^•\s*/, "");
+
+        }
+
+        continue;
+
+      }
+
+      if (!current) {
+
+        current = {
+
+          title: line,
+
+          company: "",
+
+          startDate: null,
+
+          endDate: null,
+
+          summary: ""
+
+        };
+
+        continue;
+
+      }
+
+      current.company = line;
+
+      experiences.push(current);
+
+      current = null;
+
+    }
+
+    return experiences;
+
+  }
+
+  // ----------------------------------------------------
+
+  private extractEducation(section: string): Education[] {
+
+    const lines = section
+
+      .split("\n")
+
+      .map(line => line.trim())
+
+      .filter(Boolean);
+
+    const education: Education[] = [];
+
+    for (let i = 0; i < lines.length; i += 2) {
+
+      education.push({
+
+        degree: lines[i] ?? "",
+
+        institution: lines[i + 1] ?? "",
+
+        field: "",
+
+        endYear: this.extractYear(lines[i + 1] ?? "")
+
+      });
+
+    }
+
+    return education;
+
+  }
+
+  // ----------------------------------------------------
+
+  private extractProjects(section: string): Project[] {
+
+    if (!section) {
+
+      return [];
+
+    }
+
     const blocks = section
+
       .split(/\n\s*\n/)
+
       .filter(Boolean);
 
     return blocks.map(block => {
 
       const lines = block
+
         .split("\n")
+
         .map(line => line.trim())
+
         .filter(Boolean);
 
       return {
 
-        company: lines[1] ?? "",
+        name: lines[0] ?? "",
 
-        title: lines[0] ?? "",
+        technologies: [],
 
-        startDate: null,
-
-        endDate: null,
-
-        summary: lines.slice(2).join(" ")
+        description: lines.slice(1).join(" ")
 
       };
 
@@ -122,32 +294,15 @@ export class ResumeParser implements IParser {
 
   }
 
-  private extractEducation(section: string): Education[] {
+  // ----------------------------------------------------
 
-    const blocks = section
-      .split(/\n\s*\n/)
-      .filter(Boolean);
+  private extractYear(text: string): number | null {
 
-    return blocks.map(block => {
+    const match = text.match(/\b(19|20)\d{2}\b/);
 
-      const lines = block
-        .split("\n")
-        .map(line => line.trim())
-        .filter(Boolean);
-
-      return {
-
-        institution: lines[1] ?? "",
-
-        degree: lines[0] ?? "",
-
-        field: "",
-
-        endYear: null
-
-      };
-
-    });
+    return match
+      ? Number(match[0])
+      : null;
 
   }
 
