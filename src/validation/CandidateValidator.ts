@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+const SkillSchema = z.object({
+
+name:z.string(),
+
+confidence:z.number().min(0).max(100),
+
+sources:z.array(z.string())
+
+});
+
+const ProvenanceSchema=z.object({
+
+field:z.string(),
+
+source:z.string(),
+
+method:z.string()
+
+});
+
 const LocationSchema = z.object({
   city: z.string().nullable(),
   region: z.string().nullable(),
@@ -44,7 +64,7 @@ const CandidateSchema = z.object({
 
   headline: z.string().nullable(),
 
-  skills: z.array(z.string()).nullable(),
+  skills: z.array(SkillSchema).nullable(),
 
   experience: z.array(ExperienceSchema).nullable(),
 

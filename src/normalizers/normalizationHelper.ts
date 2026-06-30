@@ -31,15 +31,28 @@ export function normalizeEmails(emails: string[]): string[] {
 /**
  * Normalizes a single phone number.
  */
-export function normalizePhone(phone: string): string {
-  return phone
-    .replace(/\D/g, "") // Keep only digits
-    .replace(/^91/, ""); // Remove India country code
+export function normalizePhone(phone: string): string | null {
+  let digits = phone.replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    digits = "91" + digits;
+  }
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return "+" + digits;
+  }
+
+  return null;
 }
 
-/**
- * Normalizes a list of phone numbers.
- */
-export function normalizePhones(phones: string[]): string[] {
-  return [...new Set(phones.map(normalizePhone).filter(Boolean))];
+export function normalizePhones(
+  phones: string[] = []
+): string[] {
+  return [
+    ...new Set(
+      phones
+        .map(normalizePhone)
+        .filter((p): p is string => p !== null)
+    )
+  ];
 }

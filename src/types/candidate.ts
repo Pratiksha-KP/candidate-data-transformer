@@ -5,10 +5,6 @@ import {
   Location,
 } from "./common";
 
-/*
- * Metadata attached to every field
- */
-
 export interface Provenance {
   source: string;
   extractionMethod: string;
@@ -33,45 +29,37 @@ export interface Confidence {
   breakdown: ConfidenceBreakdown;
 }
 
-/*
- * Generic wrapper used for every canonical field
- */
-
 export interface Field<T> {
   value: T;
-
   confidence?: Confidence;
-
   provenance: Provenance[];
-
   audit: AuditDecision;
 }
 
-/*
- * Canonical candidate profile
- */
+/** Per-skill structure required by the default output schema */
+export interface SkillEntry {
+  name: string;
+  confidence: number;
+  sources: string[];
+}
 
 export interface Candidate {
-
   candidateId: string;
 
   fullName: Field<string | null>;
-
   emails: Field<string[] | null>;
-
   phones: Field<string[]>;
-
   location: Field<Location | null>;
-
   links: Field<Links | null>;
-
   headline: Field<string | null>;
 
-  skills: Field<string[] | null>;
+  skills: Field<SkillEntry[] | null>;
 
   experience: Field<Experience[] | null>;
-
   education: Field<Education[] | null>;
+
+  /** Computed from experience; null when it can't be honestly derived (see ExperienceUtils) */
+  yearsExperience: Field<number | null>;
 
   overallConfidence: number;
 }

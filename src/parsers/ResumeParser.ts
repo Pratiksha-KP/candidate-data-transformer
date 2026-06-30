@@ -143,6 +143,35 @@ export class ResumeParser implements IParser {
 
   // ----------------------------------------------------
 
+  private extractDateRange(line: string) {
+    const months: Record<string,string> = {
+        jan:"01", feb:"02", mar:"03", apr:"04",
+        may:"05", jun:"06", jul:"07", aug:"08",
+        sep:"09", oct:"10", nov:"11", dec:"12"
+    };
+
+    const regex =
+/([A-Za-z]{3})\s+(\d{4})\s*[-–]\s*(Present|([A-Za-z]{3})\s+(\d{4}))/i;
+
+    const match = line.match(regex);
+
+    if(!match) return null;
+
+    const start =
+`${match[2]}-${months[match[1].toLowerCase()]}`;
+
+    let end = null;
+
+    if(match[3].toLowerCase() !== "present"){
+        end =
+`${match[5]}-${months[match[4].toLowerCase()]}`;
+    }
+
+    return {start,end};
+}
+
+    // ----------------------------------------------------
+
   private extractExperience(section: string): Experience[] {
 
     const lines = section
@@ -163,9 +192,12 @@ export class ResumeParser implements IParser {
 
         if (current) {
 
-          current.startDate = null;
+          const dates = this.extractDateRange(line);
 
-          current.endDate = null;
+        if(current && dates){
+            current.startDate = dates.start;
+            current.endDate = dates.end;
+}
 
         }
 
