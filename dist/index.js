@@ -1,77 +1,45 @@
-import { CandidateMerger } from "./merger/CandidateMerger.js";
-import { CSVParser } from "./parsers/csvParser.js";
-import { ResumeParser } from "./parsers/ResumeParser.js";
-
-import { LightweightNormalizer } from "./normalizers/LightweightNormalizer.js";
-import { IdentityResolver } from "./identity/IdentityResolver.js";
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const CandidateMerger_js_1 = require("./merger/CandidateMerger.js");
+const csvParser_js_1 = require("./parsers/csvParser.js");
+const ResumeParser_js_1 = require("./parsers/ResumeParser.js");
+const LightweightNormalizer_js_1 = require("./normalizers/LightweightNormalizer.js");
+const IdentityResolver_js_1 = require("./identity/IdentityResolver.js");
 async function main() {
-
     // -----------------------------
     // Parse Input Sources
     // -----------------------------
-
-    const csvParser = new CSVParser();
-    const resumeParser = new ResumeParser();
-
-    const csvCandidates = await csvParser.parse(
-        "./sample_inputs/recruiter.csv"
-    );
-
-    const resumeCandidates = await resumeParser.parse(
-        "./sample_inputs/resume.pdf"
-    );
-
+    const csvParser = new csvParser_js_1.CSVParser();
+    const resumeParser = new ResumeParser_js_1.ResumeParser();
+    const csvCandidates = await csvParser.parse("./sample_inputs/recruiter.csv");
+    const resumeCandidates = await resumeParser.parse("./sample_inputs/resume.pdf");
     console.log("========== RAW CSV ==========\n");
     console.dir(csvCandidates, { depth: null });
-
     console.log("\n========== RAW RESUME ==========\n");
     console.dir(resumeCandidates, { depth: null });
-
     // -----------------------------
     // Lightweight Normalization
     // -----------------------------
-
-    const normalizer = new LightweightNormalizer();
-
+    const normalizer = new LightweightNormalizer_js_1.LightweightNormalizer();
     const normalizedCsv = normalizer.normalizeAll(csvCandidates);
     const normalizedResume = normalizer.normalizeAll(resumeCandidates);
-
     console.log("\n========== NORMALIZED CSV ==========\n");
     console.dir(normalizedCsv, { depth: null });
-
     console.log("\n========== NORMALIZED RESUME ==========\n");
     console.dir(normalizedResume, { depth: null });
-
     // -----------------------------
     // Identity Resolution
     // -----------------------------
-
-    const resolver = new IdentityResolver();
-
-    const identityMatch = resolver.resolve(
-        normalizedCsv[0],
-        normalizedResume[0]
-    );
-
+    const resolver = new IdentityResolver_js_1.IdentityResolver();
+    const identityMatch = resolver.resolve(normalizedCsv[0], normalizedResume[0]);
     console.log("\n========== IDENTITY MATCH ==========\n");
     console.dir(identityMatch, { depth: null });
-
     // -----------------------------
     // Canonicalization
     // -----------------------------
-
-    const merger = new CandidateMerger();
-
-    const canonicalCandidate = merger.merge(
-        normalizedCsv[0],
-        normalizedResume[0],
-        identityMatch
-    );
-
+    const merger = new CandidateMerger_js_1.CandidateMerger();
+    const canonicalCandidate = merger.merge(normalizedCsv[0], normalizedResume[0], identityMatch);
     console.log("\n========== CANONICAL CANDIDATE ==========\n");
     console.dir(canonicalCandidate, { depth: null });
-
 } // <-- main() ends here
-
 main().catch(console.error);

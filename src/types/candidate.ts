@@ -57,21 +57,21 @@ export interface Candidate {
 
   fullName: Field<string | null>;
 
-  emails: Field<string[]>;
+  emails: Field<string[] | null>;
 
   phones: Field<string[]>;
 
-  location: Field<Location>;
+  location: Field<Location | null>;
 
-  links: Field<Links>;
+  links: Field<Links | null>;
 
   headline: Field<string | null>;
 
-  skills: Field<string[]>;
+  skills: Field<string[] | null>;
 
-  experience: Field<Experience[]>;
+  experience: Field<Experience[] | null>;
 
-  education: Field<Education[]>;
+  education: Field<Education[] | null>;
 
   overallConfidence: number;
 }
