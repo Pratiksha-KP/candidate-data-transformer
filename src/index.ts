@@ -4,6 +4,8 @@ import { ResumeParser } from "./parsers/ResumeParser.js";
 
 import { LightweightNormalizer } from "./normalizers/LightweightNormalizer.js";
 import { IdentityResolver } from "./identity/IdentityResolver.js";
+import { CandidateProjection } from "./projection/CandidateProjection.js";
+import { CandidateValidator } from "./validation/CandidateValidator.js";
 
 async function main() {
 
@@ -71,7 +73,26 @@ async function main() {
 
     console.log("\n========== CANONICAL CANDIDATE ==========\n");
     console.dir(canonicalCandidate, { depth: null });
+    
+    // -----------------------------
+    // PROJECTIONS
+    // -----------------------------
 
+    const projection = new CandidateProjection();
+    const projected = projection.project( canonicalCandidate);
+
+    console.log("\n========== PROJECTED CANDIDATE ==========\n");
+    console.dir(projected, { depth: null });
+
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+
+    const validator = new CandidateValidator();
+    const result = validator.validate(projected);
+    
+    console.log("\n========== VALIDATION RESULT ==========\n");
+    console.dir(result, { depth: null });
 } // <-- main() ends here
 
 main().catch(console.error);

@@ -5,6 +5,8 @@ const csvParser_js_1 = require("./parsers/csvParser.js");
 const ResumeParser_js_1 = require("./parsers/ResumeParser.js");
 const LightweightNormalizer_js_1 = require("./normalizers/LightweightNormalizer.js");
 const IdentityResolver_js_1 = require("./identity/IdentityResolver.js");
+const CandidateProjection_js_1 = require("./projection/CandidateProjection.js");
+const CandidateValidator_js_1 = require("./validation/CandidateValidator.js");
 async function main() {
     // -----------------------------
     // Parse Input Sources
@@ -41,5 +43,19 @@ async function main() {
     const canonicalCandidate = merger.merge(normalizedCsv[0], normalizedResume[0], identityMatch);
     console.log("\n========== CANONICAL CANDIDATE ==========\n");
     console.dir(canonicalCandidate, { depth: null });
+    // -----------------------------
+    // PROJECTIONS
+    // -----------------------------
+    const projection = new CandidateProjection_js_1.CandidateProjection();
+    const projected = projection.project(canonicalCandidate);
+    console.log("\n========== PROJECTED CANDIDATE ==========\n");
+    console.dir(projected, { depth: null });
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+    const validator = new CandidateValidator_js_1.CandidateValidator();
+    const result = validator.validate(projected);
+    console.log("\n========== VALIDATION RESULT ==========\n");
+    console.dir(result, { depth: null });
 } // <-- main() ends here
 main().catch(console.error);

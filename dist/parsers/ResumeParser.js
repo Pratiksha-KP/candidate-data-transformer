@@ -17,33 +17,50 @@ class ResumeParser {
             headline: this.extractHeadline(sections.header),
             emails: this.extractEmails(document.text),
             phones: this.extractPhones(document.text),
+            links: this.extractLinks(document.text),
             skills: this.extractSkills(sections.skills),
             experience: this.extractExperience(sections.experience),
-            education: this.extractEducation(sections.education)
+            education: this.extractEducation(sections.education),
+            projects: this.extractProjects(sections.projects ?? "")
         };
         return [candidate];
     }
+    // ----------------------------------------------------
     extractName(header) {
         return header
             .split("\n")
             .map(line => line.trim())
-            .find(line => line.length > 0) ?? "";
+            .find(Boolean) ?? "";
     }
+    // ----------------------------------------------------
     extractHeadline(header) {
         const lines = header
             .split("\n")
             .map(line => line.trim())
             .filter(Boolean);
-        return lines.length >= 2 ? lines[1] : "";
+        return lines.length > 1
+            ? lines[1]
+            : "";
     }
+    // ----------------------------------------------------
     extractEmails(text) {
         return text.match(regex_1.EMAIL_REGEX) ?? [];
     }
+    // ----------------------------------------------------
     extractPhones(text) {
         return text.match(regex_1.PHONE_REGEX) ?? [];
     }
-    extractSkills(skillsSection) {
-        return skillsSection
+    // ----------------------------------------------------
+    extractLinks(text) {
+        return {
+            github: text.match(/https?:\/\/(?:www\.)?github\.com\/\S+/i)?.[0],
+            linkedin: text.match(/https?:\/\/(?:www\.)?linkedin\.com\/\S+/i)?.[0],
+            portfolio: text.match(/https?:\/\/\S+/)?.[0]
+        };
+    }
+    // ----------------------------------------------------
+    extractSkills(section) {
+        return section
             .replace(/Languages:/gi, "")
             .replace(/Backend\s*\/\s*DB:/gi, "")
             .replace(/Frontend:/gi, "")
@@ -53,7 +70,68 @@ class ResumeParser {
             .map(skill => skill.trim())
             .filter(Boolean);
     }
+    // ----------------------------------------------------
     extractExperience(section) {
+        const lines = section
+            .split("\n")
+            .map(line => line.trim())
+            .filter(Boolean);
+        const experiences = [];
+        let current = null;
+        for (const line of lines) {
+            if (/^\d{4}|present|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) {
+                if (current) {
+                    current.startDate = null;
+                    current.endDate = null;
+                }
+                continue;
+            }
+            if (line.startsWith("•")) {
+                if (current) {
+                    current.summary +=
+                        (current.summary ? " " : "") +
+                            line.replace(/^•\s*/, "");
+                }
+                continue;
+            }
+            if (!current) {
+                current = {
+                    title: line,
+                    company: "",
+                    startDate: null,
+                    endDate: null,
+                    summary: ""
+                };
+                continue;
+            }
+            current.company = line;
+            experiences.push(current);
+            current = null;
+        }
+        return experiences;
+    }
+    // ----------------------------------------------------
+    extractEducation(section) {
+        const lines = section
+            .split("\n")
+            .map(line => line.trim())
+            .filter(Boolean);
+        const education = [];
+        for (let i = 0; i < lines.length; i += 2) {
+            education.push({
+                degree: lines[i] ?? "",
+                institution: lines[i + 1] ?? "",
+                field: "",
+                endYear: this.extractYear(lines[i + 1] ?? "")
+            });
+        }
+        return education;
+    }
+    // ----------------------------------------------------
+    extractProjects(section) {
+        if (!section) {
+            return [];
+        }
         const blocks = section
             .split(/\n\s*\n/)
             .filter(Boolean);
@@ -63,30 +141,18 @@ class ResumeParser {
                 .map(line => line.trim())
                 .filter(Boolean);
             return {
-                company: lines[1] ?? "",
-                title: lines[0] ?? "",
-                startDate: null,
-                endDate: null,
-                summary: lines.slice(2).join(" ")
+                name: lines[0] ?? "",
+                technologies: [],
+                description: lines.slice(1).join(" ")
             };
         });
     }
-    extractEducation(section) {
-        const blocks = section
-            .split(/\n\s*\n/)
-            .filter(Boolean);
-        return blocks.map(block => {
-            const lines = block
-                .split("\n")
-                .map(line => line.trim())
-                .filter(Boolean);
-            return {
-                institution: lines[1] ?? "",
-                degree: lines[0] ?? "",
-                field: "",
-                endYear: null
-            };
-        });
+    // ----------------------------------------------------
+    extractYear(text) {
+        const match = text.match(/\b(19|20)\d{2}\b/);
+        return match
+            ? Number(match[0])
+            : null;
     }
 }
 exports.ResumeParser = ResumeParser;

@@ -101,18 +101,19 @@ export class ResumeParser implements IParser {
 
   private extractLinks(text: string): Links {
 
-    return {
+  return {
 
-      github:
-        text.match(/https?:\/\/(?:www\.)?github\.com\/\S+/i)?.[0],
+    github:
+      text.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/\S+/i)?.[0],
 
-      linkedin:
-        text.match(/https?:\/\/(?:www\.)?linkedin\.com\/\S+/i)?.[0],
+    linkedin:
+      text.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/\S+/i)?.[0],
 
-      portfolio:
-        text.match(/https?:\/\/\S+/)?.[0]
+    portfolio:
+      text.match(/(?:https?:\/\/)?(?:www\.)?\S+\.\S+/)?.[0]
 
-    };
+  };
+
 
   }
 
