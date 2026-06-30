@@ -27,3 +27,10 @@ export interface Education {
   field: string;
   endYear: number | null;
 }
+
+export interface Project {
+  name: string;
+  technologies: string[];
+  description: string;
+  github?: string;
+}

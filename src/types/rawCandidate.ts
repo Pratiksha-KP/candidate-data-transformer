@@ -3,6 +3,7 @@ import {
   Education,
   Links,
   Location,
+  Project
 } from "./common";
 
 /*
@@ -30,4 +31,6 @@ export interface RawCandidate {
   experience?: Experience[];
 
   education?: Education[];
+
+  projects?: Project[];
 }
