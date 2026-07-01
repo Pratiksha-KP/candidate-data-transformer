@@ -1,28 +1,32 @@
 # Candidate Data Transformer
 
-A modular TypeScript pipeline that ingests candidate information from multiple sources (structured and unstructured), resolves duplicate identities, merges conflicting information into a canonical candidate profile, validates the output, and projects it into configurable schemas.
+A modular TypeScript pipeline that ingests candidate information from multiple sources
+(structured and unstructured), resolves duplicate identities, merges conflicting
+information into a canonical profile, and projects it into configurable schemas.
 
-> Built for the Eightfold Engineering Intern (Jul-Dec 2026) take-home assignment.
+> Built for the Eightfold Engineering Intern (Jul–Dec 2026) take-home assignment.
+
+---
+
+## How to Run
+
+```bash
+npm install
+npm run dev
+```
+
+Run with a custom projection config loaded from a file:
+
+```bash
+npm run dev -- --config ./path/to/config.json
+```
+
+Sample inputs are in `./sample_inputs/`:
+- `recruiter.csv` — structured source
+- `resume.pdf` — unstructured source
 
 ---
 
-## Assignment Objectives
-
-This project implements a simplified version of a candidate data ingestion pipeline similar to those used in modern Applicant Tracking Systems (ATS).
-
-Implemented capabilities include:
-
-- Structured data parsing (Recruiter CSV)
-- Unstructured resume parsing (PDF/DOCX)
-- Data normalization
-- Identity resolution
-- Candidate profile merging
-- Field-level confidence scoring
-- Provenance tracking
-- Runtime-configurable output projection
-- Schema validation using Zod
-
----
 
 # Architecture
 
@@ -67,10 +71,8 @@ Implemented capabilities include:
 src/
 │
 ├── parsers/
-│   ├── CsvParser.ts
+│   ├── csvParser.ts
 │   ├── ResumeParser.ts
-│   ├── documentExtractor.ts
-│   ├── sectionExtractor.ts
 │   └── IParser.ts
 │
 ├── normalizers/
@@ -99,159 +101,140 @@ src/
 │   ├── common.ts
 │   ├── IdentityMatch.ts
 │   ├── projectionConfig.ts
+│   └── config.ts
+│   └── document.ts
+│   └── section.ts
 │   └── ProjectionNormalizers.ts
 │
+│── utils/
+│   └── documentExtractor.ts
+│    └── regex.ts
+│   └── sectionExtractor.ts
 └── index.ts
 ```
 
 
 ---
 
-# Pipeline
+---
 
-## 1. Parse
+## Pipeline
 
-Two independent parsers convert different input formats into a common RawCandidate representation.
+### 1. Parse
 
-### Structured Source
+Two independent parsers convert different input formats into a common `RawCandidate`.
 
-- Recruiter CSV
+| Source | Type | Parser |
+|---|---|---|
+| Recruiter CSV | Structured | `CSVParser` |
+| Resume PDF/DOCX | Unstructured | `ResumeParser` |
 
-### Unstructured Source
-
-- Resume (PDF/DOCX)
+Each parser is wrapped in `safeParse()` in `index.ts` — a missing or malformed
+source logs a warning and returns an empty result rather than crashing the pipeline.
 
 ---
 
-## 2. Normalize
+### 2. Normalize
 
-Normalization standardizes extracted data before matching.
+Normalization standardizes extracted data before identity matching.
 
-Implemented normalization includes:
+| Field | Normalization applied |
+|---|---|
+| Name | Whitespace collapse and trim |
+| Emails | Lowercase, dedup |
+| Phones | E.164 format (`+91XXXXXXXXXX` for 10-digit Indian numbers) |
+| Skills | Canonical name mapping (see table below) |
+| Headline | Whitespace collapse |
 
-- Name cleanup
-- Email normalization
-- E.164 phone normalization
-- Skill canonicalization
-- Whitespace cleanup
+Skill canonicalization examples:
 
-Examples
+ReactJS   →  React
 
-```
-ReactJS
-↓
-React
+react.js  →  React
 
-NodeJS
-↓
-Node.js
+NodeJS    →  Node.js
 
-98765 43210
-↓
-+919876543210
-```
+expressjs →  Express
+
+postgres  →  PostgreSQL
 
 ---
 
-## 3. Identity Resolution
+### 3. Identity Resolution
 
-Duplicate candidates are detected using weighted identity matching.
-
-Current scoring:
+Two `RawCandidate` records are compared using weighted signal scoring.
 
 | Signal | Weight |
-|---------|--------|
-| Email | 40 |
-| Phone | 30 |
-| Name | 20 |
-| GitHub | 5 |
-| LinkedIn | 5 |
+|---|---|
+| Email match | 40 |
+| Phone match | 30 |
+| Name match | 20 |
+| GitHub match | 5 |
+| LinkedIn match | 5 |
 
-A configurable threshold (currently 60) determines whether two profiles represent the same candidate. Matching is exact-string based today — no fuzzy similarity — which is a deliberate scope decision (see *Known Limitations*).
-
----
-
-## 4. Candidate Merge
-
-When identities match, fields are merged into a canonical candidate profile.
-
-### Conflict Resolution Policy
-
-- **Scalar fields** (name, headline): Resume value wins over CSV when both exist, since resumes are typically more detailed and self-reported. CSV is used only as a fallback.
-- **Array fields** (emails, phones, education): Union of both sources with duplicates removed — nothing is dropped.
-- **Links & location**: Merged *field-by-field*, not source-by-source. A LinkedIn URL from the CSV is preserved even if the resume has its own (different) links object — picking one source wholesale would silently drop data.
-- **Skills**: Canonicalized first, then tracked per-skill across sources; a skill confirmed by both CSV and resume gets higher confidence than one seen in only one source.
-- Every decision is recorded in an `audit` block on the field (rule applied, reason, sources considered) — nothing is merged silently.
+A configurable threshold (currently **60**) determines whether records represent
+the same person. Matching is exact-string after normalization — no fuzzy similarity.
+This is a deliberate scope decision (see *Known Limitations*).
 
 ---
 
-## 5. Confidence
+### 4. Merge
 
-Every field contains explainable confidence information.
+When identities match, fields are merged into a canonical `Candidate` with a
+`Field<T>` wrapper on every value containing `confidence`, `provenance`, and `audit`.
 
-Confidence is calculated using factors such as:
+**Conflict resolution policy:**
 
-- Source reliability
-- Extraction confidence
-- Cross-source agreement
-- Completeness
-- Validation
+| Field type | Policy |
+|---|---|
+| Scalar (name, headline) | Resume wins; CSV is fallback |
+| Arrays (emails, phones, education) | Union with deduplication — nothing dropped |
+| Links | Merged property-by-property — a LinkedIn from CSV is kept even if resume has a different links object |
+| Location | Merged property-by-property (city, region, country independently) |
+| Skills | Canonicalized, then tracked per-skill across sources; cross-source agreement → confidence 100 vs single-source → confidence 60 |
+
+Every merge decision is recorded in an `audit` block: rule applied, reason, and
+sources considered. Nothing is merged silently.
+
 
 ---
 
-## 6. Provenance
 
-Each merged field stores where it originated.
+### 5. Confidence
 
-Example:
+Every `Field<T>` carries a `confidence` object:
 
 ```json
 {
-  "field": "skills",
-  "source": "Resume",
-  "method": "Resume Parser"
+  "score": 90,
+  "breakdown": {
+    "sourceReliability": 90,
+    "extractionConfidence": 90,
+    "crossSourceAgreement": 90,
+    "completeness": 90,
+    "validation": 90
+  }
 }
 ```
+
+Field-level confidence inherits from the identity match score. Per-skill confidence
+is independently computed based on cross-source agreement.
 
 ---
 
-## 7. Projection
+### 6. Projection — Required Twist
 
-The canonical model can be projected into different schemas at runtime, without touching merge logic.
+The canonical model is projected into an output shape at runtime via a
+`ProjectionConfig` — no code changes needed to reshape output.
 
-### Default output
+**Config capabilities:**
+- Select a subset of fields to include
+- Rename a field via the `from` key (e.g. `emails[0]` → `primary_email`)
+- Apply per-field normalization (`E164`, `canonical`)
+- Toggle `include_confidence` and `include_provenance`
+- Control missing-value behavior: `"null"` | `"omit"` | `"error"`
 
-```bash
-npm run dev
-```
-
-```json
-{
-  "candidateId": "3f2a9c1e-7b4d-4a8f-9c2e-1d6b8a0f5e3c",
-  "fullName": "Aditi Sharma",
-  "emails": ["aditi.sharma@example.com"],
-  "phones": ["+919876543210"],
-  "headline": "Backend Engineer",
-  "years_experience": 3.5,
-  "skills": [
-    { "name": "Node.js", "confidence": 100, "sources": ["Recruiter CSV", "Resume"] }
-  ],
-  "location": { "city": "Bengaluru", "region": "Karnataka", "country": null },
-  "links": { "linkedin": "https://linkedin.com/in/aditisharma" },
-  "experience": [ { "company": "Acme Corp", "title": "SDE-1", "startDate": "2022-01", "endDate": null } ],
-  "education": [ { "institution": "VIT", "degree": "B.Tech", "field": "CSE", "endYear": 2021 } ],
-  "overallConfidence": 90,
-  "provenance": [
-    { "field": "fullName", "source": "Resume", "method": "Resume Parser" }
-  ]
-}
-```
-
-### Custom configuration
-
-```bash
-npm run dev -- --config ./configs/recruiter-view.json
-```
+**Example custom config:**
 
 ```json
 {
@@ -262,200 +245,217 @@ npm run dev -- --config ./configs/recruiter-view.json
     { "path": "skills", "from": "skills[].name", "type": "string[]", "normalize": "canonical" }
   ],
   "include_confidence": true,
+  "include_provenance": false,
   "on_missing": "null"
 }
 ```
 
+Same merged candidate, different output shape — same engine, no code changes.
+
+---
+
+### Provided output of existing inputs
+
+
+
+
+
+---
+
+### 7. Validation
+
+Final projected output is validated with Zod before emission.
+`safeParse` returns `{ success: true, data }` or `{ success: false, error }` —
+the pipeline never silently emits an invalid profile.
+
+---
+
+## Sample Output on Provided Inputs
+
+### Identity Match
+
 ```json
 {
-  "full_name": "Aditi Sharma",
-  "full_name_confidence": 90,
-  "primary_email": "aditi.sharma@example.com",
-  "primary_email_confidence": 90,
-  "phone": "+919876543210",
-  "skills": ["Node.js"]
+  "isMatch": true,
+  "confidence": 90,
+  "reasons": ["Exact email match", "Exact phone match", "Exact name match"]
 }
 ```
 
-Same engine, same merged candidate — only the projection config changes.
+### Default Schema Projection (truncated for brevity)
+
+```json
+{
+  "candidateId": "5a8da508-caa5-4aa1-ad61-20aa981fa3a6",
+  "fullName": "Pratiksha K.P",
+  "fullName_confidence": 90,
+  "emails": ["pratikshakpmane@gmail.com"],
+  "phones": ["+919108830425"],
+  "headline": "Software Engineer | Full-Stack Development & Machine Learning",
+  "years_experience": 0.5,
+  "skills": [
+    { "name": "Node.js", "confidence": 100, "sources": ["Recruiter CSV", "Resume"] },
+    { "name": "Express", "confidence": 100, "sources": ["Recruiter CSV", "Resume"] },
+    { "name": "PostgreSQL", "confidence": 100, "sources": ["Recruiter CSV", "Resume"] },
+    { "name": "React", "confidence": 100, "sources": ["Recruiter CSV", "Resume"] },
+    { "name": "JavaScript", "confidence": 60, "sources": ["Resume"] }
+  ],
+  "location": null,
+  "experience": [
+    {
+      "title": "Research Intern — IoT & Indoor Localization",
+      "company": "Samsung R&D Institute, Bengaluru",
+      "startDate": "2026-01",
+      "endDate": null
+    }
+  ],
+  "overallConfidence": 90
+}
+```
+
+### Validation Result
+
+```json
+{ "success": true }
+```
+
+### Custom Config Projection
+
+```json
+{
+  "full_name": "Pratiksha K.P",
+  "full_name_confidence": 90,
+  "primary_email": "pratikshakpmane@gmail.com",
+  "primary_email_confidence": 90,
+  "phone": "+919108830425",
+  "skills": ["Node.js", "Express", "PostgreSQL", "React", "JavaScript", "..."]
+}
+```
 
 ---
 
-## 8. Validation
-
-Final projected output is validated using Zod before emission. This guarantees schema correctness and catches malformed outputs early. Validation runs against the canonical `Candidate` shape; custom projections are checked structurally (required fields, types) rather than against the full Zod schema, since a custom config can legitimately omit or rename fields.
-
----
-
-# Edge Cases & Graceful Degradation
+## Edge Cases Handled
 
 | Edge case | Behavior |
 |---|---|
-| Candidate has no email or phone | `computeCandidateId` falls back through email → phone → full name → a fixed `"unknown-candidate"` seed, so an ID is always produced deterministically rather than crashing. |
-| Malformed/short phone number | `normalizePhone` returns `null` and the number is dropped, not guessed at — never invents a digit. |
-| Resume has no parseable experience dates | `computeYearsExperience` returns `null` instead of fabricating a number ("wrong-but-confident is worse than honestly-empty"). |
-| Same skill named differently across sources (`ReactJS` vs `React`) | `SkillNormalizer` canonicalizes both to one entry and records both sources, bumping confidence to 100. |
-| One full source (CSV or resume) is missing entirely | All merge/normalize functions accept `undefined` and fall back to the other source; `mergeArrays`/`mergeLinks`/`mergeLocation` never throw on a missing side. |
-| A field required by a custom projection config is missing | Controlled by `on_missing`: `"null"` (default), `"omit"`, or `"error"` (throws `MissingRequiredFieldError`) — caller decides, not the engine. |
+| Missing source (CSV or resume absent) | `safeParse` catches the error, logs a warning, pipeline continues on the remaining source |
+| Malformed / short phone number | `normalizePhone` returns `null`; number is dropped rather than guessed |
+| Skill named differently across sources (`ReactJS` vs `React.js`) | Canonicalized to one entry; both sources recorded; confidence bumped to 100 |
+| Same skill in only one source | Confidence 60; source recorded honestly |
+| Links object present in only one source | `mergeLinks` merges property-by-property; no data silently dropped |
+| No experience dates parseable | `computeYearsExperience` returns `null` — never fabricates a number |
+| Required field missing in custom config with `on_missing: "error"` | Throws `MissingRequiredFieldError` — caller decides policy, not the engine |
+| `on_missing: "omit"` | Key is entirely absent from output rather than null |
+| No identity signals at all | `computeCandidateId` falls back: email → phone → name → `"unknown-candidate"` seed; always produces a stable deterministic ID |
 
 ---
 
-# Assumptions & Descoped Items
+## Known Limitations & Honest Descoping
 
-The assignment listed several optional source types beyond the required minimum (one structured + one unstructured). This implementation covers:
+**Education parsing is structurally fragile.** `ResumeParser.extractEducation`
+reads pairs of lines, which breaks when a resume has date ranges or CGPA on
+the same line as the institution name. In the sample output, `degree` and
+`institution` are sometimes swapped as a result. Fix requires a more robust
+section parser — descoped under time constraints.
 
-- ✅ Recruiter CSV (structured)
-- ✅ Resume PDF/DOCX (unstructured)
+**`portfolio` extraction is too greedy.** The regex
+`/(?:https?:\/\/)?(?:www\.)?\S+\.\S+/` in `ResumeParser.extractLinks` matches
+any `X.Y` token, so it picks up `K.P` (part of the candidate's name) instead
+of a real URL. Should be constrained to known TLDs or explicit URL patterns.
 
-Descoped due to time constraints, not implemented:
+**`linkedin: undefined` in merged links.** When the resume has no LinkedIn URL,
+`mergeLinks` sets `linkedin: undefined` rather than omitting the key. Zod's
+`.optional()` accepts this, but it's cleaner to strip `undefined` keys before
+output.
 
-- ATS JSON blob
-- GitHub profile API
-- LinkedIn profile fields
-- Recruiter notes (.txt)
+**Location is always null.** Neither parser currently extracts a `location`
+field from the sample inputs. The merge and projection layers handle it
+correctly when a parser populates it — descoped for this submission.
 
-The `IdentityResolver` already scores GitHub/LinkedIn signals (5 points each) so adding those sources later only requires a new parser feeding the same `RawCandidate` shape — no resolver/merger changes needed.
+**Phone E.164 is India-first.** Bare 10-digit numbers are assumed `+91`.
+Production correctness requires a library like `libphonenumber-js`.
 
-Other assumptions:
-- Bare 10-digit phone numbers are assumed Indian (`+91`); true E.164 normalization for arbitrary countries would need a library like `libphonenumber`.
-- Identity matching is exact-string (case/whitespace normalized), not fuzzy — two genuinely different spellings of the same name won't be linked.
-- `country` in `location` is not currently coerced to ISO-3166 alpha-2; it's passed through as extracted.
+**Identity matching is exact-string only.** No fuzzy similarity
+(Jaro-Winkler / Levenshtein). Two spellings of the same name won't link
+unless they normalize identically.
 
----
-
-# Testing
-
-No automated tests are included in this submission — descoped to prioritize the core pipeline (parsing, normalization, identity resolution, merge, projection, validation) under time constraints. The engine was validated manually against the sample inputs for both the default schema and a custom projection config.
-
-If extended, the highest-value first tests would be: `IdentityResolver` scoring against known match/non-match pairs, `MergerUtils` conflict resolution (resume-wins-on-scalar, field-by-field link/location merge), and a gold-profile comparison on one resume with missing experience dates (the `null` years-experience edge case).
-
----
-
-# Design Decisions
-
-## Modular Architecture
-
-Each stage performs a single responsibility.
-
-```
-Parser → Normalizer → Resolver → Merger → Projection → Validation
-```
-
-This separation makes each component independently testable and replaceable.
+**No automated tests.** Validated manually against sample inputs for both
+default and custom projection. Highest-value first tests would be:
+`IdentityResolver` scoring on known match/non-match pairs, `MergerUtils`
+conflict resolution, and a gold-profile comparison on the sample resume.
 
 ---
 
-## Deterministic Processing
+## Descoped Source Types
 
-The pipeline produces deterministic outputs for identical inputs, enabling reproducible candidate records. Candidate IDs are content-derived (SHA-256 of the best available identity signal), not randomly generated, so the same candidate always resolves to the same ID across runs.
+| Source | Status |
+|---|---|
+| Recruiter CSV | ✅ Implemented |
+| Resume PDF/DOCX | ✅ Implemented |
+| ATS JSON blob | ❌ Descoped |
+| GitHub profile API | ❌ Descoped |
+| LinkedIn profile fields | ❌ Descoped |
+| Recruiter notes (.txt) | ❌ Descoped |
 
----
-
-## Explainability
-
-Instead of only producing merged data, the pipeline preserves:
-
-- confidence
-- provenance
-- audit decisions
-
-making every merged value explainable — including *why* it was null, not just why it had a value.
-
----
-
-# Technologies
-
-- TypeScript
-- Node.js
-- Zod
-- PDF parsing
-- DOCX parsing
+The `IdentityResolver` already scores GitHub and LinkedIn signals (5 pts each).
+Adding those sources only requires a new parser returning `RawCandidate` —
+no resolver, merger, or projection changes needed.
 
 ---
 
-# Running
-
-Install dependencies
-
-```bash
-npm install
-```
-
-Run with default projection
-
-```bash
-npm run dev
-```
-
-Run with a custom projection config
-
-```bash
-npm run dev -- --config ./path/to/config.json
-```
-
----
-
-# Sample Output
-
-Pipeline stages printed by the demo:
-
-```
-Raw CSV
-↓
-Raw Resume
-↓
-Normalized Data
-↓
-Identity Match
-↓
-Canonical Candidate
-↓
-Projected Candidate
-↓
-Validation Result
-```
-
----
-
-# Assignment Requirement Mapping
+## Requirement Mapping
 
 | Requirement | Implementation |
-|-------------|----------------|
-| Structured Parsing | ✅ CsvParser |
-| Unstructured Parsing | ✅ ResumeParser |
-| Graceful Failure | ✅ Safe parsing, all merge/normalize helpers tolerate missing sources |
-| Normalization | ✅ LightweightNormalizer |
-| Identity Resolution | ✅ IdentityResolver (weighted, deterministic) |
-| Candidate Merge | ✅ CandidateMerger |
-| Skill Canonicalization | ✅ SkillNormalizer |
-| Provenance | ✅ CandidateMerger / MergerUtils |
-| Confidence | ✅ Field metadata (MergerUtils) |
-| Runtime-configurable Projection | ✅ CandidateProjection + ProjectionConfig |
-| Validation | ✅ CandidateValidator (Zod) |
+|---|---|
+| Structured source | ✅ `CSVParser` |
+| Unstructured source | ✅ `ResumeParser` (PDF + DOCX) |
+| Graceful failure on bad source | ✅ `safeParse` wrapper in `index.ts` |
+| Phone normalization | ✅ E.164 in `normalizationHelper.ts` + `ProjectionNormalizers.ts` |
+| Skill canonicalization | ✅ `SkillNormalizer.ts` |
+| Identity resolution | ✅ `IdentityResolver` (weighted, deterministic) |
+| Merge with provenance + confidence | ✅ `CandidateMerger` + `MergerUtils` |
+| Runtime-configurable projection | ✅ `CandidateProjection` + `ProjectionConfig` |
+| Default schema output | ✅ Default config in `CandidateProjection` |
+| Custom config output | ✅ Demonstrated in `index.ts` and via `--config` flag |
+| Validation before emit | ✅ `CandidateValidator` (Zod) |
+| Deterministic candidate ID | ✅ `CandidateId.ts` (SHA-256 of best identity signal) |
 
 ---
 
-# Known Limitations
+## Design Decisions
 
-- Resume parsing is regex-based and optimized for common resume layouts.
-- Complex resume formatting may require additional parsing strategies.
-- Identity resolution currently uses deterministic weighted matching rather than fuzzy string similarity (Jaro-Winkler/Levenshtein).
-- `ExperienceUtils.computeYearsExperience` returns `null` whenever the resume parser hasn't populated `startDate`/`endDate` — by design, rather than guessing.
-- Phone E.164 normalization is a simplified India-first heuristic, not a full international library.
+**Deterministic IDs over random UUIDs.** `candidateId` is a SHA-256 hash of
+the best available identity signal (email preferred, then phone, then name).
+Same candidate always resolves to the same ID across runs.
+
+**`Field<T>` wrapper on every canonical value.** Rather than a flat merged
+object, every field carries `confidence`, `provenance`, and `audit` inline.
+This makes every value explainable — including *why* it's null.
+
+**Projection is a separate layer from merge.** The canonical `Candidate` is
+never mutated to produce output. Projection reads it and applies a config
+to produce any shape the caller wants. This means the same merged record
+can power multiple views (recruiter view, ATS export, internal analytics)
+without touching the merge logic.
+
+**Resume wins on scalars, union on arrays.** Resumes are self-reported and
+typically more detailed than recruiter CSV exports. Arrays are unioned because
+dropping either source's emails/phones would be a silent data loss — always
+worse than having duplicates that dedup cleanly.
 
 ---
 
-# Future Improvements
+## Technologies
 
-- Fuzzy name matching (Jaro-Winkler / Levenshtein)
-- OCR support for scanned resumes
-- LLM-assisted resume parsing
-- Configurable confidence models
-- Multi-language resume support
-- Additional structured/unstructured sources (ATS JSON, GitHub, LinkedIn, recruiter notes)
+- TypeScript / Node.js
+- `pdf-parse` — PDF text extraction
+- `mammoth` — DOCX text extraction
+- `csv-parser` — streaming CSV parsing
+- `zod` — runtime schema validation
+- Node.js `crypto` — deterministic ID generation
 
 ---
 
-# Author
+## Author
 
-Pratiksha K.P.
+Pratiksha K.P
