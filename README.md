@@ -257,6 +257,7 @@ Same merged candidate, different output shape — same engine, no code changes.
 ### Provided output of existing inputs
 
 Raw csv and resume extraction:
+
 <img width="709" height="720" alt="Screenshot 2026-07-01 at 8 17 15 AM" src="https://github.com/user-attachments/assets/be1ab95f-03bb-4440-8d84-e8afff903618" />
 
 Normalized csv and resume:
