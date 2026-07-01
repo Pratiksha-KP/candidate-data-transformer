@@ -256,8 +256,24 @@ Same merged candidate, different output shape — same engine, no code changes.
 
 ### Provided output of existing inputs
 
+Raw csv and resume extraction:
+<img width="709" height="720" alt="Screenshot 2026-07-01 at 8 17 15 AM" src="https://github.com/user-attachments/assets/be1ab95f-03bb-4440-8d84-e8afff903618" />
 
+Normalized csv and resume:
+<img width="1414" height="1434" alt="image" src="https://github.com/user-attachments/assets/3fb3813c-d9dc-404c-ad97-439dc0d98f43" />
 
+Identity Match with confidence breakdowns:
+<img width="1354" height="1434" alt="image" src="https://github.com/user-attachments/assets/f08f3a52-1ee0-463b-8ea2-994c4d80c415" />
+<img width="1070" height="1412" alt="image" src="https://github.com/user-attachments/assets/678d58d1-d55a-4b68-85b3-465ab0d8eed9" />
+
+Projected candidate with default schema:
+<img width="988" height="1432" alt="image" src="https://github.com/user-attachments/assets/c6da7411-1c87-44f0-a136-ccb2c3229105" />
+
+Validated result:
+<img width="986" height="1434" alt="image" src="https://github.com/user-attachments/assets/b5d1a1cd-5d1f-4892-8edf-2401a44253ee" />
+
+Projected candidate with custom config:
+<img width="426" height="346" alt="Screenshot 2026-07-01 at 8 24 34 AM" src="https://github.com/user-attachments/assets/ac07275f-75d0-499d-b460-0dddff66c222" />
 
 
 ---
