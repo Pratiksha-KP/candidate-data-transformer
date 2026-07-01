@@ -70,7 +70,11 @@ const CandidateSchema = z.object({
 
   education: z.array(EducationSchema).nullable(),
 
-  overallConfidence: z.number().min(0).max(100)
+  overallConfidence: z.number().min(0).max(100),
+
+  years_experience: z.number().nullable().optional(),
+
+  provenance: z.array(ProvenanceSchema).optional(),
 
 });
 

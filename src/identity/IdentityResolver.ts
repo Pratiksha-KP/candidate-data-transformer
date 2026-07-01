@@ -135,7 +135,7 @@ export class IdentityResolver {
 
     }
 
-    return a.fullName === b.fullName;
+    return a.fullName.toLowerCase() === b.fullName.toLowerCase();
 
   }
 

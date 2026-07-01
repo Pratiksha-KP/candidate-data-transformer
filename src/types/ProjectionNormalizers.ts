@@ -10,17 +10,11 @@ type NormalizeFn = (value: any) => any;
  * (e.g. libphonenumber) for production correctness; noted as a known limitation.
  */
 function toE164(value: string): string {
+  if (value.startsWith("+")) return value; // already normalized upstream
   const digits = value.replace(/\D/g, "");
-
-  if (digits.length === 10) {
-    return `+91${digits}`;
-  }
-
-  if (digits.length > 10) {
-    return `+${digits}`;
-  }
-
-  return value; // can't confidently normalize, return as-is rather than invent data
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length > 10) return `+${digits}`;
+  return value;
 }
 
 function applyToValue(value: any, fn: (v: string) => string): any {
